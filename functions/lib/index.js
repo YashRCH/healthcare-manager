@@ -41,10 +41,12 @@ const app_1 = require("firebase-admin/app");
 const firestore_2 = require("firebase-admin/firestore");
 const generative_ai_1 = require("@google/generative-ai");
 const sgMail = __importStar(require("@sendgrid/mail"));
+const googleapis_1 = require("googleapis");
 // Lazy-loaded variables
 let db;
 let genAI;
 let SENDGRID_API_KEY = "";
+let oauth2Client;
 function init() {
     if (!(0, app_1.getApps)().length) {
         (0, app_1.initializeApp)();
@@ -56,6 +58,13 @@ function init() {
     SENDGRID_API_KEY = process.env.SENDGRID_API_KEY || "";
     if (SENDGRID_API_KEY) {
         sgMail.setApiKey(SENDGRID_API_KEY);
+    }
+    const clientId = process.env.GOOGLE_CALENDAR_CLIENT_ID || "";
+    const clientSecret = process.env.GOOGLE_CALENDAR_CLIENT_SECRET || "";
+    const refreshToken = process.env.GOOGLE_CALENDAR_REFRESH_TOKEN || "";
+    if (clientId && clientSecret && refreshToken) {
+        oauth2Client = new googleapis_1.google.auth.OAuth2(clientId, clientSecret);
+        oauth2Client.setCredentials({ refresh_token: refreshToken });
     }
 }
 /**
@@ -85,12 +94,38 @@ exports.bookAppointment = (0, https_1.onCall)(async (request) => {
             }
             // Create new appointment
             const newAppointmentRef = appointmentsRef.doc();
+            let calendarEventId = "";
+            if (oauth2Client) {
+                try {
+                    const calendar = googleapis_1.google.calendar({ version: "v3", auth: oauth2Client });
+                    const startTime = new Date(slotTime);
+                    const endTime = new Date(startTime.getTime() + 30 * 60000); // 30 min duration
+                    const event = await calendar.events.insert({
+                        calendarId: 'primary',
+                        requestBody: {
+                            summary: 'Medical Appointment via CareManager',
+                            description: 'Automated booking. Symptoms provided via portal.',
+                            start: { dateTime: startTime.toISOString() },
+                            end: { dateTime: endTime.toISOString() },
+                            attendees: [
+                                { email: 'patient@example.com' }, // In a real app, query patient/doctor emails
+                                { email: 'doctor@example.com' }
+                            ]
+                        }
+                    });
+                    calendarEventId = event.data.id || "";
+                }
+                catch (calErr) {
+                    console.error("Failed to create Google Calendar event (continuing booking):", calErr.message);
+                }
+            }
             transaction.set(newAppointmentRef, {
                 doctorId,
                 patientId,
                 slotTime,
                 symptoms: symptoms || "",
                 status: "booked",
+                calendarEventId,
                 createdAt: firestore_2.FieldValue.serverTimestamp(),
             });
         });
@@ -147,6 +182,20 @@ exports.handleDoctorLeave = (0, firestore_1.onDocumentCreated)("leaves/{leaveId}
                 console.log(`Sending cancellation email to patientId: ${appointment.patientId} for appointment on ${appointment.slotTime} due to doctor leave.`);
                 if (SENDGRID_API_KEY) {
                     // sgMail.send({ ... })
+                }
+                // Remove from Google Calendar if event exists
+                if (oauth2Client && appointment.calendarEventId) {
+                    try {
+                        const calendar = googleapis_1.google.calendar({ version: "v3", auth: oauth2Client });
+                        calendar.events.delete({
+                            calendarId: 'primary',
+                            eventId: appointment.calendarEventId,
+                        });
+                        console.log(`Deleted calendar event ${appointment.calendarEventId}`);
+                    }
+                    catch (calErr) {
+                        console.error("Failed to delete Google Calendar event:", calErr.message);
+                    }
                 }
             }
         });

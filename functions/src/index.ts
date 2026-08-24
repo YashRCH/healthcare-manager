@@ -5,13 +5,13 @@ import { getApps, initializeApp } from "firebase-admin/app";
 import { getFirestore, FieldValue, Timestamp } from "firebase-admin/firestore";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import * as sgMail from "@sendgrid/mail";
-import { google } from "googleapis";
 
 // Lazy-loaded variables
 let db: FirebaseFirestore.Firestore;
 let genAI: GoogleGenerativeAI;
 let SENDGRID_API_KEY = "";
 let oauth2Client: any;
+let google: any;
 
 function init() {
   if (!getApps().length) {
@@ -23,6 +23,10 @@ function init() {
   SENDGRID_API_KEY = process.env.SENDGRID_API_KEY || "";
   if (SENDGRID_API_KEY) {
     sgMail.setApiKey(SENDGRID_API_KEY);
+  }
+
+  if (!google) {
+    google = require("googleapis").google;
   }
 
   const clientId = process.env.GOOGLE_CALENDAR_CLIENT_ID || "";
