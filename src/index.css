@@ -80,3 +80,94 @@ h1, h2, h3, h4, h5, h6 {
     radial-gradient(at 80% 0%, hsla(189,100%,56%,0.2) 0px, transparent 50%),
     radial-gradient(at 0% 50%, hsla(355,100%,93%,0.2) 0px, transparent 50%);
 }
+
+/* Unthinkable UI Aesthetic Classes */
+
+.grid-bg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image: 
+    linear-gradient(to right, rgba(99, 102, 241, 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(99, 102, 241, 0.05) 1px, transparent 1px);
+  background-size: 40px 40px;
+  mask-image: radial-gradient(circle at center, black, transparent 80%);
+  -webkit-mask-image: radial-gradient(circle at center, black, transparent 80%);
+  z-index: 0;
+  pointer-events: none;
+}
+
+.hero-title-italic {
+  font-family: 'Outfit', sans-serif;
+  font-style: italic;
+  background: linear-gradient(to right, #6366f1, #3b82f6);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.hero-search-inner {
+  display: flex;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(99, 102, 241, 0.2);
+  border-radius: 9999px;
+  padding: 0.5rem 1rem;
+  box-shadow: 0 10px 25px -5px rgba(99, 102, 241, 0.1), 0 8px 10px -6px rgba(99, 102, 241, 0.1);
+  transition: all 0.3s ease;
+}
+
+.hero-search-inner:focus-within {
+  border-color: #6366f1;
+  box-shadow: 0 10px 25px -5px rgba(99, 102, 241, 0.2), 0 8px 10px -6px rgba(99, 102, 241, 0.1);
+}
+
+.suggestion-pill {
+  background: rgba(255, 255, 255, 0.6);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  border-radius: 9999px;
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #475569;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.suggestion-pill:hover {
+  background: white;
+  border-color: #6366f1;
+  color: #6366f1;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 6px -1px rgba(99, 102, 241, 0.1);
+}
+
+.comparison-card {
+  border-radius: 1.5rem;
+  padding: 2.5rem;
+  height: 100%;
+}
+
+.comparison-card.typical {
+  background: rgba(248, 250, 252, 0.8);
+  border: 1px solid rgba(226, 232, 240, 0.8);
+}
+
+.comparison-card.unthinkable {
+  background: rgba(255, 255, 255, 1);
+  border: 1px solid rgba(99, 102, 241, 0.2);
+  box-shadow: 0 20px 40px -10px rgba(99, 102, 241, 0.1);
+}
+
+.step-num {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #6366f1;
+  display: block;
+  margin-bottom: 1rem;
+}

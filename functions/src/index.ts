@@ -1,20 +1,27 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { onDocumentCreated } from "firebase-functions/v2/firestore";
 import { onSchedule } from "firebase-functions/v2/scheduler";
-import * as admin from "firebase-admin";
+import { getApps, initializeApp } from "firebase-admin/app";
+import { getFirestore, FieldValue, Timestamp } from "firebase-admin/firestore";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import * as sgMail from "@sendgrid/mail";
 
-admin.initializeApp();
-const db = admin.firestore();
+// Lazy-loaded variables
+let db: FirebaseFirestore.Firestore;
+let genAI: GoogleGenerativeAI;
+let SENDGRID_API_KEY = "";
 
-// Initialize Gemini
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "dummy-key");
-
-// Initialize SendGrid (Optional / Stubbed)
-const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY || "";
-if (SENDGRID_API_KEY) {
-  sgMail.setApiKey(SENDGRID_API_KEY);
+function init() {
+  if (!getApps().length) {
+    initializeApp();
+  }
+  if (!db) db = getFirestore();
+  if (!genAI) genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "dummy-key");
+  
+  SENDGRID_API_KEY = process.env.SENDGRID_API_KEY || "";
+  if (SENDGRID_API_KEY) {
+    sgMail.setApiKey(SENDGRID_API_KEY);
+  }
 }
 
 /**
@@ -24,6 +31,7 @@ if (SENDGRID_API_KEY) {
  * Uses a Firestore Transaction to prevent double-booking for the same doctor at the same slotTime.
  */
 export const bookAppointment = onCall(async (request) => {
+  init();
   const data = request.data;
   const { doctorId, patientId, slotTime, symptoms } = data;
 
@@ -34,7 +42,7 @@ export const bookAppointment = onCall(async (request) => {
   const appointmentsRef = db.collection("appointments");
 
   try {
-    await db.runTransaction(async (transaction) => {
+    await db.runTransaction(async (transaction: any) => {
       // Check for existing booking
       const query = appointmentsRef
         .where("doctorId", "==", doctorId)
@@ -58,7 +66,7 @@ export const bookAppointment = onCall(async (request) => {
         slotTime,
         symptoms: symptoms || "",
         status: "booked",
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        createdAt: FieldValue.serverTimestamp(),
       });
     });
 
@@ -80,6 +88,7 @@ export const bookAppointment = onCall(async (request) => {
 export const handleDoctorLeave = onDocumentCreated(
   "leaves/{leaveId}",
   async (event) => {
+    init();
     const snapshot = event.data;
     if (!snapshot) return;
 
@@ -101,7 +110,7 @@ export const handleDoctorLeave = onDocumentCreated(
       const batch = db.batch();
       let cancelCount = 0;
 
-      conflictingAppointments.forEach((doc) => {
+      conflictingAppointments.forEach((doc: any) => {
         const appointment = doc.data();
         
         // Parse the appointment date to check if it matches the leave date.
@@ -146,6 +155,7 @@ export const handleDoctorLeave = onDocumentCreated(
  * 3. Gemini AI Summaries
  */
 export const generatePreVisitSummary = onCall(async (request) => {
+  init();
   const data = request.data;
   const { symptoms } = data;
 
@@ -169,6 +179,7 @@ export const generatePreVisitSummary = onCall(async (request) => {
 });
 
 export const generatePostVisitSummary = onCall(async (request) => {
+  init();
   const data = request.data;
   const { notes } = data;
 
@@ -196,12 +207,13 @@ export const generatePostVisitSummary = onCall(async (request) => {
  */
 export const sendMedicationReminders = onSchedule("every 1 hours", async (event) => {
   try {
+    init();
     const now = new Date();
     const medicationsRef = db.collection("active_medications");
     
     // Check for medications that need reminders right now or earlier
     const snapshot = await medicationsRef
-      .where("nextReminderTime", "<=", admin.firestore.Timestamp.fromDate(now))
+      .where("nextReminderTime", "<=", Timestamp.fromDate(now))
       .get();
 
     if (snapshot.empty) {
@@ -212,7 +224,7 @@ export const sendMedicationReminders = onSchedule("every 1 hours", async (event)
     const batch = db.batch();
     let sentCount = 0;
 
-    snapshot.forEach((doc) => {
+    snapshot.forEach((doc: any) => {
       const data = doc.data();
       const patientEmail = data.patientEmail || "unknown@example.com";
       const medicationName = data.medicationName || "Medication";
@@ -228,7 +240,7 @@ export const sendMedicationReminders = onSchedule("every 1 hours", async (event)
       // For this example, we just mark it as processed if you want to avoid resending, 
       // or set nextReminderTime to the future. Let's just remove the nextReminderTime or set it +1 day.
       const nextDate = new Date(now.getTime() + 24 * 60 * 60 * 1000);
-      batch.update(doc.ref, { nextReminderTime: admin.firestore.Timestamp.fromDate(nextDate) });
+      batch.update(doc.ref, { nextReminderTime: Timestamp.fromDate(nextDate) });
       sentCount++;
     });
 
