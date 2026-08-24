@@ -76,17 +76,34 @@ function init() {
  * Callable function to book an appointment.
  * Uses a Firestore Transaction to prevent double-booking for the same doctor at the same slotTime.
  */
-exports.bookAppointment = (0, https_1.onCall)(async (request) => {
+exports.bookAppointment = (0, https_1.onCall)({ invoker: "public" }, async (request) => {
     init();
     const data = request.data;
     const { doctorId, patientId, slotTime, symptoms } = data;
     if (!doctorId || !patientId || !slotTime) {
         throw new https_1.HttpsError("invalid-argument", "Missing required fields (doctorId, patientId, slotTime).");
     }
+    const appointmentDate = new Date(slotTime);
+    if (isNaN(appointmentDate.getTime())) {
+        throw new https_1.HttpsError("invalid-argument", "Invalid slotTime format.");
+    }
+    if (appointmentDate < new Date()) {
+        throw new https_1.HttpsError("invalid-argument", "Cannot book appointments in the past.");
+    }
     const appointmentsRef = db.collection("appointments");
+    const leavesRef = db.collection("leaves");
+    const slotDateStr = appointmentDate.toISOString().split("T")[0];
     try {
         await db.runTransaction(async (transaction) => {
-            // Check for existing booking
+            // 1. Check for Doctor Leaves
+            const leaveQuery = leavesRef
+                .where("doctorId", "==", doctorId)
+                .where("date", "==", slotDateStr);
+            const leaveSnapshot = await transaction.get(leaveQuery);
+            if (!leaveSnapshot.empty) {
+                throw new https_1.HttpsError("already-exists", "The doctor is currently on leave for this date.");
+            }
+            // 2. Check for existing booking
             const query = appointmentsRef
                 .where("doctorId", "==", doctorId)
                 .where("slotTime", "==", slotTime)
@@ -217,7 +234,7 @@ exports.handleDoctorLeave = (0, firestore_1.onDocumentCreated)("leaves/{leaveId}
 /**
  * 3. Gemini AI Summaries
  */
-exports.generatePreVisitSummary = (0, https_1.onCall)(async (request) => {
+exports.generatePreVisitSummary = (0, https_1.onCall)({ invoker: "public" }, async (request) => {
     init();
     const data = request.data;
     const { symptoms } = data;
@@ -237,7 +254,7 @@ exports.generatePreVisitSummary = (0, https_1.onCall)(async (request) => {
         throw new https_1.HttpsError("internal", "Failed to generate summary.");
     }
 });
-exports.generatePostVisitSummary = (0, https_1.onCall)(async (request) => {
+exports.generatePostVisitSummary = (0, https_1.onCall)({ invoker: "public" }, async (request) => {
     init();
     const data = request.data;
     const { notes } = data;

@@ -45,7 +45,7 @@ function init() {
  * Callable function to book an appointment.
  * Uses a Firestore Transaction to prevent double-booking for the same doctor at the same slotTime.
  */
-export const bookAppointment = onCall(async (request) => {
+export const bookAppointment = onCall({ invoker: "public" }, async (request) => {
   init();
   const data = request.data;
   const { doctorId, patientId, slotTime, symptoms } = data;
@@ -233,7 +233,7 @@ export const handleDoctorLeave = onDocumentCreated(
 /**
  * 3. Gemini AI Summaries
  */
-export const generatePreVisitSummary = onCall(async (request) => {
+export const generatePreVisitSummary = onCall({ invoker: "public" }, async (request) => {
   init();
   const data = request.data;
   const { symptoms } = data;
@@ -257,7 +257,7 @@ export const generatePreVisitSummary = onCall(async (request) => {
   }
 });
 
-export const generatePostVisitSummary = onCall(async (request) => {
+export const generatePostVisitSummary = onCall({ invoker: "public" }, async (request) => {
   init();
   const data = request.data;
   const { notes } = data;
