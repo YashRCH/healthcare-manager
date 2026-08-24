@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { useAuth } from '../../context/AuthContext';
 import { Search, Calendar, Stethoscope, AlertCircle, Activity, Pill, History } from 'lucide-react';
@@ -16,10 +16,20 @@ export default function PatientDashboard() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
   
+  // Profile Edit States
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [editForm, setEditForm] = useState({
+    bloodType: '',
+    weight: '',
+    height: '',
+    allergies: ''
+  });
+  
   // EHR Data States
   const [profile, setProfile] = useState<any>(null);
   const [prescriptions, setPrescriptions] = useState<any[]>([]);
   const [history, setHistory] = useState<any[]>([]);
+  const [upcoming, setUpcoming] = useState<any[]>([]);
 
   useEffect(() => {
     if (user) {
@@ -34,7 +44,16 @@ export default function PatientDashboard() {
     const docRef = doc(db, 'users', user.uid);
     const docSnap = await getDoc(docRef);
     if (docSnap.exists()) {
-      setProfile(docSnap.data());
+      const data = docSnap.data();
+      setProfile(data);
+      if (data.vitals) {
+        setEditForm({
+          bloodType: data.vitals.bloodType || '',
+          weight: data.vitals.weight || '',
+          height: data.vitals.height || '',
+          allergies: data.vitals.allergies ? data.vitals.allergies.join(', ') : ''
+        });
+      }
     }
 
     // 2. Fetch Active Prescriptions
@@ -42,10 +61,16 @@ export default function PatientDashboard() {
     const rxSnap = await getDocs(rxQ);
     setPrescriptions(rxSnap.docs.map(d => ({ id: d.id, ...d.data() })));
 
-    // 3. Fetch Past Appointments
-    const apptsQ = query(collection(db, 'appointments'), where('patientId', '==', user.uid), where('status', '==', 'completed'));
+    // Fetch all appointments for the patient (requires only one index on patientId)
+    const apptsQ = query(collection(db, 'appointments'), where('patientId', '==', user.uid));
     const apptsSnap = await getDocs(apptsQ);
-    setHistory(apptsSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+    const allAppts = apptsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+    // 3. Filter Past Appointments
+    setHistory(allAppts.filter((a: any) => a.status === 'completed'));
+
+    // 4. Filter Upcoming Appointments
+    setUpcoming(allAppts.filter((a: any) => a.status === 'booked' || a.status === 'rescheduled'));
   };
 
   const searchDoctors = async () => {
@@ -89,8 +114,29 @@ export default function PatientDashboard() {
       setSelectedDoctor(null);
       setSymptoms('');
       setSlotTime('');
+      fetchEHRData(); // Refresh the list to show the new appointment
     } catch (err: any) {
       setMessage(`Booking failed: ${err.message}`);
+    }
+    setLoading(false);
+  };
+
+  const saveProfile = async () => {
+    if (!user) return;
+    setLoading(true);
+    try {
+      await updateDoc(doc(db, 'users', user.uid), {
+        vitals: {
+          bloodType: editForm.bloodType,
+          weight: editForm.weight,
+          height: editForm.height,
+          allergies: editForm.allergies.split(',').map(a => a.trim()).filter(a => a)
+        }
+      });
+      setIsEditingProfile(false);
+      fetchEHRData(); // Refresh UI
+    } catch (err: any) {
+      console.error('Failed to update profile:', err);
     }
     setLoading(false);
   };
@@ -103,35 +149,68 @@ export default function PatientDashboard() {
       </div>
       
       {/* EHR Section */}
-      <div className="grid md:grid-cols-3 gap-6">
+      <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
         
         {/* Vitals */}
-        <div className="glass-card p-6">
-          <h2 className="text-lg font-bold mb-4 flex items-center gap-2 text-slate-800">
-            <Activity className="w-5 h-5 text-primary-500" />
-            Medical Profile
-          </h2>
-          {profile?.vitals ? (
+        <div className="glass-card p-6 relative">
+          <div className="flex justify-between items-start mb-4">
+            <h2 className="text-lg font-bold flex items-center gap-2 text-slate-800">
+              <Activity className="w-5 h-5 text-primary-500" />
+              Medical Profile
+            </h2>
+            <button 
+              onClick={() => setIsEditingProfile(!isEditingProfile)}
+              className="text-xs text-primary-600 hover:text-primary-800 font-semibold"
+            >
+              {isEditingProfile ? 'Cancel' : 'Edit'}
+            </button>
+          </div>
+
+          {isEditingProfile ? (
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs text-slate-500 uppercase font-bold">Blood Type</label>
+                <input type="text" value={editForm.bloodType} onChange={e => setEditForm({...editForm, bloodType: e.target.value})} className="w-full text-sm p-2 rounded border border-slate-200 mt-1" placeholder="e.g. O+" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-slate-500 uppercase font-bold">Weight</label>
+                  <input type="text" value={editForm.weight} onChange={e => setEditForm({...editForm, weight: e.target.value})} className="w-full text-sm p-2 rounded border border-slate-200 mt-1" placeholder="e.g. 70kg" />
+                </div>
+                <div>
+                  <label className="text-xs text-slate-500 uppercase font-bold">Height</label>
+                  <input type="text" value={editForm.height} onChange={e => setEditForm({...editForm, height: e.target.value})} className="w-full text-sm p-2 rounded border border-slate-200 mt-1" placeholder="e.g. 175cm" />
+                </div>
+              </div>
+              <div>
+                <label className="text-xs text-slate-500 uppercase font-bold">Allergies (comma separated)</label>
+                <input type="text" value={editForm.allergies} onChange={e => setEditForm({...editForm, allergies: e.target.value})} className="w-full text-sm p-2 rounded border border-slate-200 mt-1" placeholder="e.g. Peanuts, Penicillin" />
+              </div>
+              <button onClick={saveProfile} disabled={loading} className="w-full mt-2 bg-primary-600 text-white text-sm font-bold py-2 rounded-lg hover:bg-primary-700 disabled:opacity-50">
+                {loading ? 'Saving...' : 'Save Profile'}
+              </button>
+            </div>
+          ) : profile?.vitals ? (
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div className="bg-white/50 p-3 rounded-lg border border-slate-100">
                 <span className="text-slate-400 block text-xs uppercase tracking-wider font-bold mb-1">Blood Type</span>
-                <span className="font-semibold text-slate-800 text-lg">{profile.vitals.bloodType}</span>
+                <span className="font-semibold text-slate-800 text-lg">{profile.vitals.bloodType || '-'}</span>
               </div>
               <div className="bg-white/50 p-3 rounded-lg border border-slate-100">
                 <span className="text-slate-400 block text-xs uppercase tracking-wider font-bold mb-1">Weight</span>
-                <span className="font-semibold text-slate-800 text-lg">{profile.vitals.weight}</span>
+                <span className="font-semibold text-slate-800 text-lg">{profile.vitals.weight || '-'}</span>
               </div>
               <div className="bg-white/50 p-3 rounded-lg border border-slate-100">
                 <span className="text-slate-400 block text-xs uppercase tracking-wider font-bold mb-1">Height</span>
-                <span className="font-semibold text-slate-800 text-lg">{profile.vitals.height}</span>
+                <span className="font-semibold text-slate-800 text-lg">{profile.vitals.height || '-'}</span>
               </div>
               <div className="bg-white/50 p-3 rounded-lg border border-slate-100">
                 <span className="text-slate-400 block text-xs uppercase tracking-wider font-bold mb-1">Allergies</span>
-                <span className="font-semibold text-red-500">{profile.vitals.allergies.join(', ')}</span>
+                <span className="font-semibold text-red-500">{(profile.vitals.allergies && profile.vitals.allergies.length > 0) ? profile.vitals.allergies.join(', ') : 'None'}</span>
               </div>
             </div>
           ) : (
-             <p className="text-sm text-slate-500">No profile data available.</p>
+             <p className="text-sm text-slate-500">No profile data available. Click Edit to add.</p>
           )}
         </div>
 
@@ -167,7 +246,7 @@ export default function PatientDashboard() {
             {history.length > 0 ? history.map(appt => (
               <div key={appt.id} className="bg-white/60 p-4 rounded-xl border border-slate-200">
                 <div className="flex justify-between items-center mb-2">
-                  <h3 className="font-bold text-slate-900">{appt.doctorName}</h3>
+                  <h3 className="font-bold text-slate-900">{appt.doctorName || 'Doctor'}</h3>
                   <span className="text-xs text-slate-500">{new Date(appt.slotTime).toLocaleDateString()}</span>
                 </div>
                 <p className="text-sm text-slate-600 line-clamp-2">
@@ -176,6 +255,38 @@ export default function PatientDashboard() {
               </div>
             )) : (
               <p className="text-sm text-slate-500">No past visits.</p>
+            )}
+          </div>
+        </div>
+
+        {/* Upcoming Appointments */}
+        <div className="glass-card p-6">
+          <h2 className="text-lg font-bold mb-4 flex items-center gap-2 text-slate-800">
+            <Calendar className="w-5 h-5 text-primary-500" />
+            Upcoming
+          </h2>
+          <div className="space-y-3 overflow-y-auto max-h-[200px] pr-2">
+            {upcoming.length > 0 ? upcoming.map(appt => (
+              <div key={appt.id} className="bg-white/60 p-4 rounded-xl border border-primary-200 shadow-sm shadow-primary-500/10">
+                <div className="flex justify-between items-center mb-2">
+                  <h3 className="font-bold text-slate-900">{appt.doctorName || 'Your Doctor'}</h3>
+                  <span className="text-xs bg-primary-100 text-primary-700 px-2 py-1 rounded-md font-bold uppercase">Booked</span>
+                </div>
+                <p className="text-sm text-slate-600 font-medium">{new Date(appt.slotTime).toLocaleString()}</p>
+                {appt.symptoms && (
+                  <p className="text-xs text-slate-500 mt-2 line-clamp-1">
+                    <span className="font-semibold">Reason:</span> {appt.symptoms}
+                  </p>
+                )}
+                {appt.preVisitSummary && (
+                  <div className="mt-3 p-3 bg-white rounded-lg border border-primary-100 text-xs text-slate-600">
+                    <span className="font-semibold block text-primary-700 mb-1">AI Pre-visit Summary:</span>
+                    <p className="whitespace-pre-line leading-relaxed">{appt.preVisitSummary}</p>
+                  </div>
+                )}
+              </div>
+            )) : (
+              <p className="text-sm text-slate-500">No upcoming appointments.</p>
             )}
           </div>
         </div>
