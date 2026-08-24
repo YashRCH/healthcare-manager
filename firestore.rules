@@ -1,8 +1,74 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /{document=**} {
-      allow read, write: if request.auth != null;
+    
+    // Helper functions for Role-Based Access Control
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+    
+    function isAdmin() {
+      return isAuthenticated() && getUserData().role == 'admin';
+    }
+    
+    function isDoctor() {
+      return isAuthenticated() && getUserData().role == 'doctor';
+    }
+
+    // 1. Users Collection
+    match /users/{userId} {
+      // Admins can read/write all
+      // Doctors can read all users (to find patient profiles)
+      // Users can only read/write their own profile
+      allow read: if isAuthenticated() && (isAdmin() || isDoctor() || request.auth.uid == userId);
+      allow write: if isAuthenticated() && (isAdmin() || request.auth.uid == userId);
+      
+      // 1a. Prescriptions subcollection
+      match /prescriptions/{prescriptionId} {
+        // Doctors and Admins can manage prescriptions
+        // Patients can only read their own
+        allow read: if isAuthenticated() && (isAdmin() || isDoctor() || request.auth.uid == userId);
+        allow write: if isAuthenticated() && (isAdmin() || isDoctor());
+      }
+    }
+
+    // 2. Appointments Collection
+    match /appointments/{appointmentId} {
+      // Admins can read/write all
+      // Doctors can read/write their own appointments
+      // Patients can read their own appointments (backend function handles creation)
+      allow read: if isAuthenticated() && (
+        isAdmin() || 
+        (isDoctor() && resource.data.doctorId == request.auth.uid) || 
+        (resource.data.patientId == request.auth.uid)
+      );
+      
+      // Only doctors or admins can update appointments directly from client (e.g., adding notes)
+      allow update: if isAuthenticated() && (
+        isAdmin() || 
+        (isDoctor() && resource.data.doctorId == request.auth.uid)
+      );
+      
+      // Creating appointments is restricted to the backend Cloud Function
+      allow create, delete: if false; 
+    }
+
+    // 3. Leaves Collection
+    match /leaves/{leaveId} {
+      // Anyone authenticated can read (to know when doctors are away)
+      allow read: if isAuthenticated();
+      // Only admins or the specific doctor can create leaves
+      allow write: if isAuthenticated() && (isAdmin() || (isDoctor() && request.resource.data.doctorId == request.auth.uid));
+    }
+
+    // 4. Active Medications Collection
+    match /active_medications/{medId} {
+      allow read: if isAuthenticated() && (isAdmin() || isDoctor() || resource.data.patientId == request.auth.uid);
+      allow write: if isAuthenticated() && (isAdmin() || isDoctor());
     }
   }
 }

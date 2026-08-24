@@ -6,6 +6,8 @@ import Login from './pages/Login';
 import PatientDashboard from './pages/patient/Dashboard';
 import DoctorDashboard from './pages/doctor/Dashboard';
 import AdminDashboard from './pages/admin/Dashboard';
+import PrivacyPolicy from './pages/Privacy';
+import Footer from './components/Footer';
 
 const ProtectedRoute = ({ children, allowedRoles }: { children: React.ReactNode, allowedRoles?: string[] }) => {
   const { user, role, loading } = useAuth();
@@ -27,6 +29,7 @@ function App() {
             <Routes>
               <Route path="/" element={<Home />} />
               <Route path="/login" element={<Login />} />
+              <Route path="/privacy" element={<PrivacyPolicy />} />
               
               <Route path="/patient/*" element={
                 <ProtectedRoute allowedRoles={['patient']}>
@@ -47,6 +50,7 @@ function App() {
               } />
             </Routes>
           </main>
+          <Footer />
         </div>
       </Router>
     </AuthProvider>
