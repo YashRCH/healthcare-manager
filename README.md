@@ -34,5 +34,24 @@ The application separates concerns between a React frontend and Firebase serverl
 - **Backend:** Firebase Cloud Functions v2 handle the core business logic. Specifically, the `bookAppointment` function ensures transaction safety to prevent double-booking. The Gemini AI integration is moved to the backend to securely manage API keys and perform LLM inference for pre/post-visit summaries.
 - **Tradeoffs:** To avoid complex composite index requirements on Firestore which can cause deployment delays, multi-field filtering is handled efficiently by combining single-field indexing with localized client/server filtering.
 
+```mermaid
+graph TD
+    Client[React Frontend]
+    Auth[Firebase Auth]
+    DB[(Firestore)]
+    CF[Cloud Functions v2]
+    AI[Google Gemini API]
+    
+    Client -->|Logs in via Google/Email| Auth
+    Auth -->|Validates RBAC| Client
+    Client -->|Reads Docs| DB
+    Client -->|Calls Endpoint| CF
+    
+    CF -->|Validates request.auth| CF
+    CF -->|Transaction Safety| DB
+    CF -->|Generates Summaries| AI
+    AI -->|Returns Analysis| CF
+```
+
 ## ■ What I'd improve with more time
 With more time, I would implement an automated email/SMS reminder system using a PubSub scheduled Cloud Function and SendGrid. I would also add more comprehensive unit tests for the React components using Jest and React Testing Library.

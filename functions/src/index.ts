@@ -44,8 +44,18 @@ function init() {
  */
 export const bookAppointment = onCall({ invoker: "public" }, async (request) => {
   init();
+  
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "You must be logged in to book an appointment.");
+  }
+
   const data = request.data;
   const { doctorId, patientId, slotTime, symptoms } = data;
+
+  // Security: Enforce that users can only book for themselves
+  if (request.auth.uid !== patientId) {
+    throw new HttpsError("permission-denied", "You can only book appointments for yourself.");
+  }
 
   if (!doctorId || !patientId || !slotTime) {
     throw new HttpsError("invalid-argument", "Missing required fields (doctorId, patientId, slotTime).");
@@ -232,6 +242,11 @@ export const handleDoctorLeave = onDocumentCreated(
  */
 export const generatePreVisitSummary = onCall({ invoker: "public" }, async (request) => {
   init();
+
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "You must be logged in to generate summaries.");
+  }
+
   const data = request.data;
   const { symptoms } = data;
 
@@ -264,6 +279,11 @@ export const generatePreVisitSummary = onCall({ invoker: "public" }, async (requ
 
 export const generatePostVisitSummary = onCall({ invoker: "public" }, async (request) => {
   init();
+
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "You must be logged in to generate summaries.");
+  }
+
   const data = request.data;
   const { notes } = data;
 
