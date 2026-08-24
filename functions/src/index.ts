@@ -54,11 +54,34 @@ export const bookAppointment = onCall(async (request) => {
     throw new HttpsError("invalid-argument", "Missing required fields (doctorId, patientId, slotTime).");
   }
 
+  const appointmentDate = new Date(slotTime);
+  if (isNaN(appointmentDate.getTime())) {
+    throw new HttpsError("invalid-argument", "Invalid slotTime format.");
+  }
+  if (appointmentDate < new Date()) {
+    throw new HttpsError("invalid-argument", "Cannot book appointments in the past.");
+  }
+
   const appointmentsRef = db.collection("appointments");
+  const leavesRef = db.collection("leaves");
+  const slotDateStr = appointmentDate.toISOString().split("T")[0];
 
   try {
     await db.runTransaction(async (transaction: any) => {
-      // Check for existing booking
+      // 1. Check for Doctor Leaves
+      const leaveQuery = leavesRef
+        .where("doctorId", "==", doctorId)
+        .where("date", "==", slotDateStr);
+      const leaveSnapshot = await transaction.get(leaveQuery);
+
+      if (!leaveSnapshot.empty) {
+        throw new HttpsError(
+          "already-exists",
+          "The doctor is currently on leave for this date."
+        );
+      }
+
+      // 2. Check for existing booking
       const query = appointmentsRef
         .where("doctorId", "==", doctorId)
         .where("slotTime", "==", slotTime)
