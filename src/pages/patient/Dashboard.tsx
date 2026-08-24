@@ -1,8 +1,8 @@
-import { useState } from 'react';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { useState, useEffect } from 'react';
+import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { useAuth } from '../../context/AuthContext';
-import { Search, Calendar, Stethoscope, AlertCircle } from 'lucide-react';
+import { Search, Calendar, Stethoscope, AlertCircle, FileText, Activity, Pill, History } from 'lucide-react';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '../../firebase';
 
@@ -15,6 +15,38 @@ export default function PatientDashboard() {
   const [slotTime, setSlotTime] = useState('');
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
+  
+  // EHR Data States
+  const [profile, setProfile] = useState<any>(null);
+  const [prescriptions, setPrescriptions] = useState<any[]>([]);
+  const [history, setHistory] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (user) {
+      fetchEHRData();
+    }
+  }, [user]);
+
+  const fetchEHRData = async () => {
+    if (!user) return;
+    
+    // 1. Fetch Profile & Vitals
+    const docRef = doc(db, 'users', user.uid);
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
+      setProfile(docSnap.data());
+    }
+
+    // 2. Fetch Active Prescriptions
+    const rxQ = query(collection(db, `users/${user.uid}/prescriptions`), where('status', '==', 'active'));
+    const rxSnap = await getDocs(rxQ);
+    setPrescriptions(rxSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+
+    // 3. Fetch Past Appointments
+    const apptsQ = query(collection(db, 'appointments'), where('patientId', '==', user.uid), where('status', '==', 'completed'));
+    const apptsSnap = await getDocs(apptsQ);
+    setHistory(apptsSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+  };
 
   const searchDoctors = async () => {
     setLoading(true);
@@ -40,12 +72,10 @@ export default function PatientDashboard() {
     setLoading(true);
     setMessage('');
     try {
-      // 1. Generate Pre-Visit Summary using Cloud Function
       const generatePreVisit = httpsCallable(functions, 'generatePreVisitSummary');
       const summaryRes: any = await generatePreVisit({ symptoms });
       const preVisitSummary = summaryRes.data.summary;
 
-      // 2. Book appointment using transactional Cloud Function to avoid double-booking
       const bookAppointment = httpsCallable(functions, 'bookAppointment');
       await bookAppointment({
         doctorId: selectedDoctor.id,
@@ -67,8 +97,92 @@ export default function PatientDashboard() {
 
   return (
     <div className="space-y-8 animate-fade-in-up">
-      <h1 className="text-4xl font-extrabold text-slate-900 tracking-tight">Patient Dashboard</h1>
+      <div className="flex justify-between items-end">
+        <h1 className="text-4xl font-extrabold text-slate-900 tracking-tight">Patient Dashboard</h1>
+        {profile && <p className="text-slate-500 font-medium">Welcome back, {profile.name}</p>}
+      </div>
       
+      {/* EHR Section */}
+      <div className="grid md:grid-cols-3 gap-6">
+        
+        {/* Vitals */}
+        <div className="glass-card p-6">
+          <h2 className="text-lg font-bold mb-4 flex items-center gap-2 text-slate-800">
+            <Activity className="w-5 h-5 text-primary-500" />
+            Medical Profile
+          </h2>
+          {profile?.vitals ? (
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <div className="bg-white/50 p-3 rounded-lg border border-slate-100">
+                <span className="text-slate-400 block text-xs uppercase tracking-wider font-bold mb-1">Blood Type</span>
+                <span className="font-semibold text-slate-800 text-lg">{profile.vitals.bloodType}</span>
+              </div>
+              <div className="bg-white/50 p-3 rounded-lg border border-slate-100">
+                <span className="text-slate-400 block text-xs uppercase tracking-wider font-bold mb-1">Weight</span>
+                <span className="font-semibold text-slate-800 text-lg">{profile.vitals.weight}</span>
+              </div>
+              <div className="bg-white/50 p-3 rounded-lg border border-slate-100">
+                <span className="text-slate-400 block text-xs uppercase tracking-wider font-bold mb-1">Height</span>
+                <span className="font-semibold text-slate-800 text-lg">{profile.vitals.height}</span>
+              </div>
+              <div className="bg-white/50 p-3 rounded-lg border border-slate-100">
+                <span className="text-slate-400 block text-xs uppercase tracking-wider font-bold mb-1">Allergies</span>
+                <span className="font-semibold text-red-500">{profile.vitals.allergies.join(', ')}</span>
+              </div>
+            </div>
+          ) : (
+             <p className="text-sm text-slate-500">No profile data available.</p>
+          )}
+        </div>
+
+        {/* Prescriptions */}
+        <div className="glass-card p-6">
+          <h2 className="text-lg font-bold mb-4 flex items-center gap-2 text-slate-800">
+            <Pill className="w-5 h-5 text-primary-500" />
+            Active Prescriptions
+          </h2>
+          <div className="space-y-3 overflow-y-auto max-h-[200px] pr-2">
+            {prescriptions.length > 0 ? prescriptions.map(rx => (
+              <div key={rx.id} className="bg-white/60 p-4 rounded-xl border border-slate-200">
+                <div className="flex justify-between items-start">
+                  <h3 className="font-bold text-slate-900">{rx.medication}</h3>
+                  <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-1 rounded-md font-bold uppercase">Active</span>
+                </div>
+                <p className="text-sm text-slate-600 mt-1">{rx.dosage} • {rx.frequency}</p>
+                <p className="text-xs text-slate-400 mt-2">Prescribed by {rx.prescribedBy}</p>
+              </div>
+            )) : (
+              <p className="text-sm text-slate-500">No active prescriptions.</p>
+            )}
+          </div>
+        </div>
+
+        {/* History */}
+        <div className="glass-card p-6">
+          <h2 className="text-lg font-bold mb-4 flex items-center gap-2 text-slate-800">
+            <History className="w-5 h-5 text-primary-500" />
+            Past Visits
+          </h2>
+          <div className="space-y-3 overflow-y-auto max-h-[200px] pr-2">
+            {history.length > 0 ? history.map(appt => (
+              <div key={appt.id} className="bg-white/60 p-4 rounded-xl border border-slate-200">
+                <div className="flex justify-between items-center mb-2">
+                  <h3 className="font-bold text-slate-900">{appt.doctorName}</h3>
+                  <span className="text-xs text-slate-500">{new Date(appt.slotTime).toLocaleDateString()}</span>
+                </div>
+                <p className="text-sm text-slate-600 line-clamp-2">
+                  <span className="font-semibold">Note:</span> {appt.postVisitSummary}
+                </p>
+              </div>
+            )) : (
+              <p className="text-sm text-slate-500">No past visits.</p>
+            )}
+          </div>
+        </div>
+
+      </div>
+
+      {/* Booking Section */}
       <div className="grid md:grid-cols-2 gap-8">
         <div className="glass-card p-8">
           <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">

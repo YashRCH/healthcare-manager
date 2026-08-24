@@ -89,18 +89,7 @@ export default function Home() {
         </div>
       </main>
 
-      {/* Trusted By Marquee */}
-      <section className="relative z-10 py-16 bg-white border-y border-slate-200">
-        <div className="max-w-7xl mx-auto px-4">
-          <p className="text-center text-sm font-semibold text-slate-500 uppercase tracking-widest mb-8">Trusted By 100+ Clinics & Hospitals</p>
-          <div className="flex justify-center gap-12 md:gap-24 opacity-60 grayscale flex-wrap">
-            <div className="text-2xl font-black font-heading tracking-tighter">MayoClinic</div>
-            <div className="text-2xl font-black font-heading tracking-tighter">ClevelandClinic</div>
-            <div className="text-2xl font-black font-heading tracking-tighter">JohnsHopkins</div>
-            <div className="text-2xl font-black font-heading tracking-tighter">MassGeneral</div>
-          </div>
-        </div>
-      </section>
+
 
       {/* Comparison Section */}
       <section className="relative z-10 py-24 bg-slate-50">
