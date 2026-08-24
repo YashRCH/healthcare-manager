@@ -87,6 +87,69 @@ To enable automated calendar invites for booked appointments and cancellations, 
    firebase functions:secrets:set GOOGLE_CALENDAR_REFRESH_TOKEN
    ```
 
+## Setup Guide
+
+### Local Development
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/YashRCH/healthcare-manager.git
+   cd healthcare-manager
+   ```
+2. **Install Dependencies:**
+   ```bash
+   npm install
+   cd functions && npm install && cd ..
+   ```
+3. **Environment Setup:**
+   Copy the provided `.env.example` to `.env` and fill in your Firebase client config.
+   ```bash
+   cp .env.example .env
+   ```
+4. **Start the Frontend:**
+   ```bash
+   npm run dev
+   ```
+
+### Deployment
+To deploy the full stack to Firebase:
+1. Authenticate with Firebase CLI: `firebase login`
+2. Initialize your project: `firebase use --add`
+3. Deploy functions and hosting:
+   ```bash
+   npm run build
+   firebase deploy
+   ```
+
+## API Docs (Cloud Functions)
+
+All backend communication happens via Firebase HTTPS Callable Functions to ensure secure, authenticated requests.
+- **`bookAppointment(data: {doctorId, patientId, slotTime, symptoms})`**: Attempts a strict Firestore transaction to reserve a slot. Returns `{ success: true }` or throws an `already-exists` error.
+- **`generatePreVisitSummary(data: {symptoms})`**: Uses Gemini AI to parse raw symptoms. Returns `{ summary: string }`.
+- **`generatePostVisitSummary(data: {notes})`**: Uses Gemini AI to expand shorthand medical notes into patient-friendly instructions. Returns `{ summary: string }`.
+- **`handleDoctorLeave(trigger)`**: Background `onDocumentCreated` trigger on the `leaves` collection that queries and batch-cancels conflicting appointments.
+- **`sendMedicationReminders(schedule)`**: Background Pub/Sub cron job running every hour to simulate reminder emails based on the `active_medications` collection.
+
+## DB Schema (Firestore NoSQL)
+
+- **`users`**: Contains both `patient` and `doctor` profiles. 
+  - Sub-collection **`users/{uid}/prescriptions`**: Holds active medical prescriptions (medication name, dosage, frequency, status).
+  - Vitals object: Contains `bloodType`, `weight`, `height`, `allergies`.
+- **`appointments`**: The central bookings collection. 
+  - Fields: `doctorId`, `patientId`, `slotTime`, `status` (booked/cancelled/completed), `symptoms`, `preVisitSummary`, `postVisitNotes`, `postVisitSummary`, `calendarEventId`.
+- **`leaves`**: Records doctor unavailability.
+  - Fields: `doctorId`, `date`.
+- **`active_medications`**: Flattened, query-optimized collection specifically for the background cron job to efficiently scan for imminent medication reminders based on a `nextReminderTime` timestamp.
+
+## LLM Prompts
+
+We utilize strict prompts against `gemini-1.5-flash` to ensure deterministic formatting for medical analysis.
+
+**Pre-visit Summary:**
+> *"Analyse these symptoms and return: urgency level (Low / Medium / High), chief complaint, and three suggested questions for the doctor. Symptoms: <symptoms>"*
+
+**Post-visit Summary:**
+> *"Convert these clinical notes into a patient-friendly summary with medication schedule and follow-up steps: <notes>"*
+
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.

@@ -41,12 +41,12 @@ const app_1 = require("firebase-admin/app");
 const firestore_2 = require("firebase-admin/firestore");
 const generative_ai_1 = require("@google/generative-ai");
 const sgMail = __importStar(require("@sendgrid/mail"));
-const googleapis_1 = require("googleapis");
 // Lazy-loaded variables
 let db;
 let genAI;
 let SENDGRID_API_KEY = "";
 let oauth2Client;
+let google;
 function init() {
     if (!(0, app_1.getApps)().length) {
         (0, app_1.initializeApp)();
@@ -59,11 +59,14 @@ function init() {
     if (SENDGRID_API_KEY) {
         sgMail.setApiKey(SENDGRID_API_KEY);
     }
+    if (!google) {
+        google = require("googleapis").google;
+    }
     const clientId = process.env.GOOGLE_CALENDAR_CLIENT_ID || "";
     const clientSecret = process.env.GOOGLE_CALENDAR_CLIENT_SECRET || "";
     const refreshToken = process.env.GOOGLE_CALENDAR_REFRESH_TOKEN || "";
     if (clientId && clientSecret && refreshToken) {
-        oauth2Client = new googleapis_1.google.auth.OAuth2(clientId, clientSecret);
+        oauth2Client = new google.auth.OAuth2(clientId, clientSecret);
         oauth2Client.setCredentials({ refresh_token: refreshToken });
     }
 }
@@ -97,7 +100,7 @@ exports.bookAppointment = (0, https_1.onCall)(async (request) => {
             let calendarEventId = "";
             if (oauth2Client) {
                 try {
-                    const calendar = googleapis_1.google.calendar({ version: "v3", auth: oauth2Client });
+                    const calendar = google.calendar({ version: "v3", auth: oauth2Client });
                     const startTime = new Date(slotTime);
                     const endTime = new Date(startTime.getTime() + 30 * 60000); // 30 min duration
                     const event = await calendar.events.insert({
@@ -186,7 +189,7 @@ exports.handleDoctorLeave = (0, firestore_1.onDocumentCreated)("leaves/{leaveId}
                 // Remove from Google Calendar if event exists
                 if (oauth2Client && appointment.calendarEventId) {
                     try {
-                        const calendar = googleapis_1.google.calendar({ version: "v3", auth: oauth2Client });
+                        const calendar = google.calendar({ version: "v3", auth: oauth2Client });
                         calendar.events.delete({
                             calendarId: 'primary',
                             eventId: appointment.calendarEventId,
