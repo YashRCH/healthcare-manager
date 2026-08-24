@@ -1,155 +1,38 @@
-<p align="center">
-  <img width="30%" height="30%" src="https://img.icons8.com/color/512/heart-health.png" alt="CareManager Logo">
-</p>
-
 # CareManager
 
-**A production-ready healthcare management platform built around Gemini AI pre-visit summaries, transactional smart-booking, and automated follow-ups — all orchestrated on Firebase Functions v2.**
+A comprehensive Healthcare Appointment & Follow-up Manager built for patients, doctors, and administrators to streamline booking, electronic health records (EHR), and automated AI-driven summaries.
 
-CareManager is an AI-native clinic management platform. The domain is healthcare scheduling; the engineering problem is automating the manual triage and follow-up processes at consumer-app latency, ensuring zero double-booking through robust transactions, and presenting it all in a premium, glassmorphic UI. This README focuses on how that's built.
+## ■ Live Demo
+[Deployed App](https://unthinkable-7d043.web.app)
 
-![React](https://img.shields.io/badge/React-18.x-61DAFB?logo=react&logoColor=black)
-![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript&logoColor=white)
-![Firebase](https://img.shields.io/badge/Firebase-Functions%20v2-FFCA28?logo=firebase&logoColor=black)
-![Gemini AI](https://img.shields.io/badge/Gemini%20AI-1.5%20Flash-4285F4?logo=googlecloud&logoColor=white)
+## ■ Problem
+Booking doctor appointments is often disconnected from the patient's actual medical context, leading to rushed visits. Patients lack clear visibility into their past and upcoming appointments, while doctors lack automated context regarding the patient's immediate symptoms and overall health profile before the visit.
 
-**Live Demo:** [https://unthinkable-7d043.web.app](https://unthinkable-7d043.web.app)
+## ■■ Tech Stack
+TypeScript / React (Vite) / Firebase Firestore / Firebase Functions / Google Gemini AI
 
-## Engineering highlights
+## ■ Features
+- **Smart Booking & Scheduling** (Patients can view available doctors and slot times to book appointments with real-time conflict resolution)
+- **AI Pre-visit Summaries** (Doctors receive AI-generated summaries detailing patient urgency and suggested questions before the visit)
+- **AI Post-visit Summaries** (Doctors can enter clinical notes which are automatically converted into patient-friendly follow-up instructions)
+- **Integrated Medical Profile** (Patients can maintain their EHR, including vitals and allergies, which instantly syncs with the doctor's dashboard)
 
-- **AI-Native Pre-Visit Summaries** — Patients input raw symptoms naturally. Google Gemini AI processes the data to generate structured urgency levels, chief complaints, and suggested questions for the doctor before the patient even steps into the clinic.
-- **Transactional Smart-Booking** — Advanced scheduling prevents double-booking using strictly enforced Firestore transactions, ensuring data integrity at the database layer even under concurrent booking attempts.
-- **Autonomous Conflict Resolution (Event-Driven)** — If a doctor submits a leave request, an `onDocumentCreated` Firestore trigger automatically crawls the schedule, cancels all conflicting appointments, and queues patient notification events.
-- **Automated Post-Visit Summaries** — Doctors provide shorthand notes, and the LLM translates them into patient-friendly follow-up instructions and structured medication schedules.
-- **Background Cron Processing** — Smart medication reminders run on automated background schedulers (Firebase Scheduled Functions) to process active prescriptions and simulate reminder emails to ensure medical adherence.
-- **Cost & Latency Engineering** — Cloud Functions utilize lazy-initialization to eliminate cold-start timeouts and guarantee a 0ms top-level execution footprint, ensuring rapid deployment and response times.
-
-## System architecture
-
-```mermaid
-flowchart TB
-    subgraph Client["React frontend (Vite + Tailwind)"]
-        UI[Glassmorphic Dashboards] --> HOOKS[Custom Firebase Hooks]
-        HOOKS --> API[Callable Functions]
-    end
-
-    API -->|Firebase Auth + App Check| FN["Cloud Functions v2"]
-
-    subgraph Backend["AI & Orchestration Layer"]
-        FN --> BOOK[Transactional Booking]
-        FN --> LEAVE[Leave Conflict Trigger]
-        FN --> AI_PRE[Gemini: Pre-visit triage]
-        FN --> AI_POST[Gemini: Post-visit notes]
-        FN --> CRON[Cron: Medication Reminders]
-        
-        BOOK --> DB[(Firestore)]
-        LEAVE --> DB
-        AI_PRE --> GEMINI[Google Gemini 1.5 API]
-        AI_POST --> GEMINI
-        CRON --> DB
-    end
+## ■ Setup & Run Locally
+```bash
+git clone <repo>
+cd healthcare-manager
+npm install
+npm run dev
 ```
 
-## The AI pipeline in detail
+## ■ Testing
+For local testing, the application uses Vite's built-in dev server.
 
-### 1. Model layer
+## ■■ Architecture / Approach
+The application separates concerns between a React frontend and Firebase serverless backend. 
+- **Frontend:** Built with React, Vite, and Tailwind CSS. The app features role-based access control (RBAC), routing users to Patient, Doctor, or Admin dashboards based on their authentication claims.
+- **Backend:** Firebase Cloud Functions v2 handle the core business logic. Specifically, the `bookAppointment` function ensures transaction safety to prevent double-booking. The Gemini AI integration is moved to the backend to securely manage API keys and perform LLM inference for pre/post-visit summaries.
+- **Tradeoffs:** To avoid complex composite index requirements on Firestore which can cause deployment delays, multi-field filtering is handled efficiently by combining single-field indexing with localized client/server filtering.
 
-| Concern | Approach |
-|---|---|
-| Pre-visit triage | `gemini-1.5-flash` analyzes raw patient symptom strings into structured priority vectors and doctor Q&A. |
-| Post-visit translation | `gemini-1.5-flash` translates medical shorthand into patient-friendly instructions and medication tables. |
-| Security | All API calls are executed strictly server-side in Cloud Functions. No API keys are shipped to the client bundle. |
-
-The AI integrations are heavily prompt-engineered to ensure deterministic formatting, returning clear urgency levels (Low/Medium/High) and exact follow-up steps.
-
-### 2. Event-Driven Database Triggers
-
-The system leverages Firebase's event-driven architecture to keep state consistent. When a leave is registered in the `leaves` collection, the background trigger instantly queries the `appointments` collection, batches cancellations for the exact date, and commits the batch atomically.
-
-## Security & Deployment
-
-- **Zero-Leak Policy:** Strict `.gitignore` enforcement ensures `.env` files are never tracked. Keys are injected at runtime via environment variables in Google Cloud.
-- **Modern Runtime:** The backend operates on Node.js 22 (LTS) for maximum performance and security compliance.
-- **Hosting:** The frontend is bundled via Vite and globally CDN-distributed through Firebase Hosting.
-
-## Google Calendar Setup Steps
-
-To enable automated calendar invites for booked appointments and cancellations, you must configure a Google Cloud Service Account or OAuth Client:
-1. Navigate to the [Google Cloud Console](https://console.cloud.google.com/).
-2. Create a new project and enable the **Google Calendar API**.
-3. Under **Credentials**, create an **OAuth 2.0 Client ID** (Web application).
-4. Note your `Client ID` and `Client Secret`. 
-5. Authorize the client locally using the Google OAuth Playground to retrieve a persistent `Refresh Token`.
-6. Add these credentials to your Firebase Secret Manager by running:
-   ```bash
-   firebase functions:secrets:set GOOGLE_CALENDAR_CLIENT_ID
-   firebase functions:secrets:set GOOGLE_CALENDAR_CLIENT_SECRET
-   firebase functions:secrets:set GOOGLE_CALENDAR_REFRESH_TOKEN
-   ```
-
-## Setup Guide
-
-### Local Development
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/YashRCH/healthcare-manager.git
-   cd healthcare-manager
-   ```
-2. **Install Dependencies:**
-   ```bash
-   npm install
-   cd functions && npm install && cd ..
-   ```
-3. **Environment Setup:**
-   Copy the provided `.env.example` to `.env` and fill in your Firebase client config.
-   ```bash
-   cp .env.example .env
-   ```
-4. **Start the Frontend:**
-   ```bash
-   npm run dev
-   ```
-
-### Deployment
-To deploy the full stack to Firebase:
-1. Authenticate with Firebase CLI: `firebase login`
-2. Initialize your project: `firebase use --add`
-3. Deploy functions and hosting:
-   ```bash
-   npm run build
-   firebase deploy
-   ```
-
-## API Docs (Cloud Functions)
-
-All backend communication happens via Firebase HTTPS Callable Functions to ensure secure, authenticated requests.
-- **`bookAppointment(data: {doctorId, patientId, slotTime, symptoms})`**: Attempts a strict Firestore transaction to reserve a slot. Returns `{ success: true }` or throws an `already-exists` error.
-- **`generatePreVisitSummary(data: {symptoms})`**: Uses Gemini AI to parse raw symptoms. Returns `{ summary: string }`.
-- **`generatePostVisitSummary(data: {notes})`**: Uses Gemini AI to expand shorthand medical notes into patient-friendly instructions. Returns `{ summary: string }`.
-- **`handleDoctorLeave(trigger)`**: Background `onDocumentCreated` trigger on the `leaves` collection that queries and batch-cancels conflicting appointments.
-- **`sendMedicationReminders(schedule)`**: Background Pub/Sub cron job running every hour to simulate reminder emails based on the `active_medications` collection.
-
-## DB Schema (Firestore NoSQL)
-
-- **`users`**: Contains both `patient` and `doctor` profiles. 
-  - Sub-collection **`users/{uid}/prescriptions`**: Holds active medical prescriptions (medication name, dosage, frequency, status).
-  - Vitals object: Contains `bloodType`, `weight`, `height`, `allergies`.
-- **`appointments`**: The central bookings collection. 
-  - Fields: `doctorId`, `patientId`, `slotTime`, `status` (booked/cancelled/completed), `symptoms`, `preVisitSummary`, `postVisitNotes`, `postVisitSummary`, `calendarEventId`.
-- **`leaves`**: Records doctor unavailability.
-  - Fields: `doctorId`, `date`.
-- **`active_medications`**: Flattened, query-optimized collection specifically for the background cron job to efficiently scan for imminent medication reminders based on a `nextReminderTime` timestamp.
-
-## LLM Prompts
-
-We utilize strict prompts against `gemini-1.5-flash` to ensure deterministic formatting for medical analysis.
-
-**Pre-visit Summary:**
-> *"Analyse these symptoms and return: urgency level (Low / Medium / High), chief complaint, and three suggested questions for the doctor. Symptoms: <symptoms>"*
-
-**Post-visit Summary:**
-> *"Convert these clinical notes into a patient-friendly summary with medication schedule and follow-up steps: <notes>"*
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+## ■ What I'd improve with more time
+With more time, I would implement an automated email/SMS reminder system using a PubSub scheduled Cloud Function and SendGrid. I would also add more comprehensive unit tests for the React components using Jest and React Testing Library.
