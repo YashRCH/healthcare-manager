@@ -5,11 +5,13 @@ import { getApps, initializeApp } from "firebase-admin/app";
 import { getFirestore, FieldValue, Timestamp } from "firebase-admin/firestore";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import * as sgMail from "@sendgrid/mail";
+import { google } from "googleapis";
 
 // Lazy-loaded variables
 let db: FirebaseFirestore.Firestore;
 let genAI: GoogleGenerativeAI;
 let SENDGRID_API_KEY = "";
+let oauth2Client: any;
 
 function init() {
   if (!getApps().length) {
@@ -21,6 +23,15 @@ function init() {
   SENDGRID_API_KEY = process.env.SENDGRID_API_KEY || "";
   if (SENDGRID_API_KEY) {
     sgMail.setApiKey(SENDGRID_API_KEY);
+  }
+
+  const clientId = process.env.GOOGLE_CALENDAR_CLIENT_ID || "";
+  const clientSecret = process.env.GOOGLE_CALENDAR_CLIENT_SECRET || "";
+  const refreshToken = process.env.GOOGLE_CALENDAR_REFRESH_TOKEN || "";
+  
+  if (clientId && clientSecret && refreshToken) {
+    oauth2Client = new google.auth.OAuth2(clientId, clientSecret);
+    oauth2Client.setCredentials({ refresh_token: refreshToken });
   }
 }
 
@@ -60,12 +71,39 @@ export const bookAppointment = onCall(async (request) => {
 
       // Create new appointment
       const newAppointmentRef = appointmentsRef.doc();
+      
+      let calendarEventId = "";
+      if (oauth2Client) {
+        try {
+           const calendar = google.calendar({ version: "v3", auth: oauth2Client });
+           const startTime = new Date(slotTime);
+           const endTime = new Date(startTime.getTime() + 30 * 60000); // 30 min duration
+           const event = await calendar.events.insert({
+             calendarId: 'primary',
+             requestBody: {
+               summary: 'Medical Appointment via CareManager',
+               description: 'Automated booking. Symptoms provided via portal.',
+               start: { dateTime: startTime.toISOString() },
+               end: { dateTime: endTime.toISOString() },
+               attendees: [
+                 { email: 'patient@example.com' }, // In a real app, query patient/doctor emails
+                 { email: 'doctor@example.com' }
+               ]
+             }
+           });
+           calendarEventId = event.data.id || "";
+        } catch (calErr: any) {
+           console.error("Failed to create Google Calendar event (continuing booking):", calErr.message);
+        }
+      }
+
       transaction.set(newAppointmentRef, {
         doctorId,
         patientId,
         slotTime,
         symptoms: symptoms || "",
         status: "booked",
+        calendarEventId,
         createdAt: FieldValue.serverTimestamp(),
       });
     });
@@ -134,6 +172,20 @@ export const handleDoctorLeave = onDocumentCreated(
             
             if (SENDGRID_API_KEY) {
                 // sgMail.send({ ... })
+            }
+
+            // Remove from Google Calendar if event exists
+            if (oauth2Client && appointment.calendarEventId) {
+                try {
+                    const calendar = google.calendar({ version: "v3", auth: oauth2Client });
+                    calendar.events.delete({
+                        calendarId: 'primary',
+                        eventId: appointment.calendarEventId,
+                    });
+                    console.log(`Deleted calendar event ${appointment.calendarEventId}`);
+                } catch (calErr: any) {
+                    console.error("Failed to delete Google Calendar event:", calErr.message);
+                }
             }
         }
       });

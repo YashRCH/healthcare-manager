@@ -72,6 +72,21 @@ The system leverages Firebase's event-driven architecture to keep state consiste
 - **Modern Runtime:** The backend operates on Node.js 22 (LTS) for maximum performance and security compliance.
 - **Hosting:** The frontend is bundled via Vite and globally CDN-distributed through Firebase Hosting.
 
+## Google Calendar Setup Steps
+
+To enable automated calendar invites for booked appointments and cancellations, you must configure a Google Cloud Service Account or OAuth Client:
+1. Navigate to the [Google Cloud Console](https://console.cloud.google.com/).
+2. Create a new project and enable the **Google Calendar API**.
+3. Under **Credentials**, create an **OAuth 2.0 Client ID** (Web application).
+4. Note your `Client ID` and `Client Secret`. 
+5. Authorize the client locally using the Google OAuth Playground to retrieve a persistent `Refresh Token`.
+6. Add these credentials to your Firebase Secret Manager by running:
+   ```bash
+   firebase functions:secrets:set GOOGLE_CALENDAR_CLIENT_ID
+   firebase functions:secrets:set GOOGLE_CALENDAR_CLIENT_SECRET
+   firebase functions:secrets:set GOOGLE_CALENDAR_REFRESH_TOKEN
+   ```
+
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.

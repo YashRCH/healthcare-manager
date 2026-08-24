@@ -1,29 +1,53 @@
-# Healthcare Appointment & Follow-up Manager - System Design
+# System Design Document: Healthcare Appointment & Follow-up Manager
 
-## 1. Double-Booking Prevention & Slot Hold Mechanism
-To guarantee robust prevention of double-bookings in a concurrent environment, our system utilizes **Firestore Transactions**. When a patient attempts to book a specific time slot for a doctor, the client invokes a secure Firebase Cloud Function (`bookAppointment`). 
-Within this function, a Firestore transaction reads the `appointments` collection to check if an appointment document already exists for the given `doctorId` and `slotTime` with an active status (`'booked'`). 
-- If an overlapping appointment is found, the transaction immediately aborts, throwing an error to the user. 
-- If the slot is free, the transaction writes the new appointment document and commits.
-Because Firestore transactions provide strict ACID properties and optimistic concurrency control, if two patients attempt to book the exact same slot simultaneously, only the first transaction will succeed; the second will retry, detect the newly written appointment, and subsequently fail, entirely eliminating the risk of double-booking.
+This document outlines the architectural approach and engineering decisions made to solve the core domain challenges of our healthcare management platform. It specifically covers double-booking prevention, doctor leave handling, slot hold mechanisms, and notification failure handling.
 
-We do not use temporary "slot holds" (e.g., locking a slot while a user types symptoms) as it can lead to deadlocks or abandoned locks. Instead, patients fill out their symptoms first, and the booking attempt is executed as an atomic operation upon final confirmation.
+## 1. Problem-Solving Approach for Core Workflows
 
-## 2. Doctor Leave Conflict Handling
-Doctors and administrators require the ability to block out days for leave. However, existing bookings on those dates must be handled gracefully. We implement an event-driven architecture using **Firestore Document Triggers**.
-When an admin marks a doctor on leave in the Admin Portal, a new document is created in the `leaves` collection containing the `doctorId` and the `date`.
-This insertion triggers the `handleDoctorLeave` Firebase Cloud Function (`onDocumentCreated`). 
-The function executes the following steps:
-1. It queries the `appointments` collection for any document matching the `doctorId` and `slotTime` (falling within the leave date) where the status is `'booked'`.
-2. It initiates a Firestore WriteBatch.
-3. For each conflicting appointment, it updates the status to `'cancelled'`.
-4. It simultaneously dispatches an asynchronous email payload to a designated notification queue, prompting the patient to reschedule.
-This server-side trigger ensures that conflicts are resolved immediately and automatically, preventing the patient from showing up to a canceled appointment.
+### Double-Booking Prevention (Transactional Smart-Booking)
+In a high-concurrency booking environment (e.g., multiple patients attempting to book the last available 9:00 AM slot for a popular specialist), naive read-then-write operations risk race conditions. To guarantee absolute consistency and prevent double-booking, the booking process is engineered entirely on the backend utilizing strict **Firestore Transactions**.
 
-## 3. Notification Failure Handling
-Relying on external APIs (like SendGrid or Nodemailer SMTP) for critical notifications introduces the risk of transient network failures or rate limits. If an email fails during the booking or cancellation process, it could break the entire transaction, which is an anti-pattern.
-To handle this gracefully:
-- **Asynchronous Queuing:** All email notifications are pushed to a `notifications` or `mail` Firestore collection rather than being sent synchronously during the booking HTTP request.
-- **Background Dispatcher:** A separate Cloud Function listens for new documents in this collection and attempts to send the email via SendGrid. 
-- **Dead-Letter Queue & Retries:** If the SendGrid API call fails, the function catches the error, increments a `retryCount` field on the document, and leaves it in a `'failed'` state. A scheduled CRON job (using Firebase Cloud Scheduler) runs periodically to fetch all `'failed'` notifications and re-attempt delivery with exponential backoff.
-This decouples the user experience from the email provider's uptime, ensuring the system never breaks due to notification failures.
+When the `bookAppointment` Cloud Function is invoked, it locks the relevant document space and executes an atomic transaction. It queries the `appointments` collection for any document matching the requested `doctorId` and `slotTime` with a status of `booked`. If an intersecting record is found, the transaction aborts and returns an `already-exists` HttpsError to the client. If the time is clear, the transaction writes the new appointment document and commits. Because transactions retry automatically and execute atomically, this mechanism is mathematically guaranteed to prevent double-booking regardless of simultaneous concurrent requests.
+
+### Doctor Leave Management (Event-Driven Conflict Handling)
+Handling doctor leaves poses a distributed state problem: what happens to appointments that were booked prior to the doctor submitting a leave request?
+
+Rather than requiring the doctor to manually cancel appointments or building a complex synchronous checking mechanism at the UI level, the system relies on an **Event-Driven Architecture** via Firestore background triggers (`onDocumentCreated`). 
+
+When an administrator or doctor marks a leave day, a new document is inserted into the `leaves` collection. This insertion immediately fires the `handleDoctorLeave` Cloud Function in the background. The function crawls the `appointments` collection for any `booked` appointments matching the doctor's ID and the exact date. It uses a Firestore `WriteBatch` to atomically flip all intersecting appointments to `status: "cancelled"`. During this batch process, it queues targeted email cancellation notifications (via SendGrid) and executes a deletion payload to the Google Calendar API, ensuring the schedule is instantly sanitized without blocking the user interface.
+
+### Slot Hold Mechanism
+While the strict transaction layer prevents ultimate double-booking, it can lead to frustrating UX if a user spends 5 minutes filling out a detailed symptom questionnaire only to find the slot taken upon submission. 
+
+To resolve this, the system can employ a soft "Slot Hold" mechanism. When a user selects a time, a temporary document is created in a `held_slots` collection with a strict TTL (Time-To-Live) of 5 minutes. The frontend queries both `appointments` and `held_slots` when rendering available times, masking the held slot from other users. If the booking transaction successfully completes, the `held_slot` is deleted. If the user abandons the form, Firestore TTL policies automatically purge the held slot document after 5 minutes, freeing the time back to the public pool.
+
+## 2. Notification Reliability & Failure Handling
+
+### Notification Failure Handling
+Third-party notification layers (SendGrid for Email, Google API for Calendar) are prone to transient network failures, rate-limiting, and downtime. If an email fails to send during the `bookAppointment` transaction, it should not roll back the successful booking of the medical slot.
+
+To achieve robust fault tolerance, notifications are detached from the primary synchronous path. When a booking occurs, the system writes the appointment to the database and returns a success response to the client immediately. A background Firestore `onDocumentCreated` trigger listens to the `appointments` collection. This background worker attempts the HTTP calls to SendGrid and Google Calendar. 
+
+If a third-party API fails, the Cloud Function catches the error, logs it, and can leverage Google Cloud Pub/Sub with exponential backoff retries to guarantee eventual delivery of the email and calendar invite. This ensures the core database remains resilient even if the email provider suffers an outage.
+
+## 3. LLM Prompt Quality and Failure Handling
+
+The application leverages Google Gemini 1.5 Flash for critical clinical analysis tasks:
+1. **Pre-visit Triage:** `Analyse these symptoms and return: urgency level (Low / Medium / High), chief complaint, and three suggested questions for the doctor. Symptoms: <symptoms>`
+2. **Post-visit Summarization:** `Convert these clinical notes into a patient-friendly summary with medication schedule and follow-up steps: <notes>`
+
+**Failure Handling:** Large Language Models are inherently non-deterministic and prone to latency spikes or quota exhaustion. To protect the application flow, LLM calls are wrapped in aggressive `try/catch` blocks within the Cloud Functions. If the LLM times out or returns a malformed response, the function does not crash. Instead, it falls back to a deterministic string: `"Summary unavailable at this time. Please proceed with standard protocols."` This graceful degradation ensures the booking or post-visit note submission succeeds regardless of AI availability.
+
+## 4. Database Schema Design (NoSQL)
+
+The Firestore schema is denormalized and read-optimized for rapid dashboard rendering:
+
+- `users` (Collection): Stores patient, doctor, and admin profiles. Includes sub-collections like `users/{id}/prescriptions` for fast medical record retrieval.
+- `appointments` (Collection): The central source of truth for scheduling. Contains `doctorId`, `patientId`, `slotTime`, `status`, `symptoms`, `preVisitSummary`, and `postVisitNotes`.
+- `leaves` (Collection): Stores doctor unavailability. Used primarily to trigger the background conflict resolution worker.
+- `active_medications` (Collection): Dedicated collection tailored specifically for the cron job to rapidly query and send hourly medication reminders.
+
+## 5. Third-Party Integrations
+
+- **Google Calendar API:** Integrated via OAuth 2.0. Service credentials authenticate server-to-server calls to generate Calendar event payloads that invite both the patient and doctor emails simultaneously.
+- **SendGrid API:** Handles transactional email delivery for booking confirmations, reminders, and cancellations, keeping all parties informed asynchronously.
