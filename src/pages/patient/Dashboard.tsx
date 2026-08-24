@@ -66,11 +66,11 @@ export default function PatientDashboard() {
   };
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-3xl font-bold text-slate-900">Patient Dashboard</h1>
+    <div className="space-y-8 animate-fade-in-up">
+      <h1 className="text-4xl font-extrabold text-slate-900 tracking-tight">Patient Dashboard</h1>
       
-      <div className="grid md:grid-cols-2 gap-6">
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+      <div className="grid md:grid-cols-2 gap-8">
+        <div className="glass-card p-8">
           <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
             <Search className="w-5 h-5 text-primary-500" />
             Find a Doctor
@@ -81,12 +81,12 @@ export default function PatientDashboard() {
               placeholder="E.g., Cardiology, General Practice"
               value={specialization}
               onChange={(e) => setSpecialization(e.target.value)}
-              className="flex-1 rounded-lg border border-slate-300 px-3 py-2 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+              className="flex-1 rounded-xl border border-slate-200 bg-white/50 px-4 py-2.5 focus:border-primary-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary-500/20 transition-all shadow-sm"
             />
             <button
               onClick={searchDoctors}
               disabled={loading}
-              className="bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50"
+              className="premium-btn bg-primary-600 text-white font-semibold px-6 py-2.5 rounded-xl hover:bg-primary-700 transition-all disabled:opacity-50 shadow-md shadow-primary-500/20 hover:-translate-y-0.5"
             >
               Search
             </button>
@@ -97,7 +97,7 @@ export default function PatientDashboard() {
               <div 
                 key={doc.id} 
                 onClick={() => setSelectedDoctor(doc)}
-                className={`p-4 rounded-lg border cursor-pointer transition-all ${selectedDoctor?.id === doc.id ? 'border-primary-500 bg-primary-50 ring-1 ring-primary-500' : 'border-slate-200 hover:border-primary-300'}`}
+                className={`p-5 rounded-xl border cursor-pointer transition-all hover:shadow-md ${selectedDoctor?.id === doc.id ? 'border-primary-500 bg-primary-50/80 ring-2 ring-primary-500/20 scale-[1.02]' : 'border-slate-200 bg-white/60 hover:border-primary-300 hover:scale-[1.01]'}`}
               >
                 <div className="flex justify-between items-center">
                   <div>
@@ -115,7 +115,7 @@ export default function PatientDashboard() {
         </div>
 
         {selectedDoctor && (
-          <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 animate-in fade-in slide-in-from-right-4">
+          <div className="glass-card p-8 animate-fade-in-up">
             <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
               <Calendar className="w-5 h-5 text-primary-500" />
               Book Appointment
@@ -128,7 +128,7 @@ export default function PatientDashboard() {
                   type="datetime-local"
                   value={slotTime}
                   onChange={(e) => setSlotTime(e.target.value)}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                  className="w-full rounded-xl border border-slate-200 bg-white/50 px-4 py-3 focus:border-primary-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary-500/20 transition-all shadow-sm"
                 />
               </div>
 
@@ -139,7 +139,7 @@ export default function PatientDashboard() {
                   placeholder="Describe your symptoms in detail..."
                   value={symptoms}
                   onChange={(e) => setSymptoms(e.target.value)}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 resize-none"
+                  className="w-full rounded-xl border border-slate-200 bg-white/50 px-4 py-3 focus:border-primary-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary-500/20 transition-all shadow-sm resize-none"
                 />
                 <p className="text-xs text-slate-500 mt-1 flex items-center gap-1">
                   <AlertCircle className="w-3 h-3" />
@@ -156,7 +156,7 @@ export default function PatientDashboard() {
               <button
                 onClick={bookSlot}
                 disabled={loading}
-                className="w-full bg-primary-600 text-white font-medium px-4 py-2.5 rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50"
+                className="premium-btn w-full bg-gradient-to-r from-primary-600 to-primary-700 text-white font-bold px-4 py-3.5 rounded-xl hover:shadow-lg shadow-primary-500/30 transition-all disabled:opacity-50 hover:-translate-y-0.5 mt-2"
               >
                 {loading ? 'Processing...' : 'Confirm Booking'}
               </button>

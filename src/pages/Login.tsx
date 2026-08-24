@@ -43,91 +43,96 @@ export default function Login() {
   };
 
   return (
-    <div className="flex min-h-[80vh] flex-col justify-center py-12 sm:px-6 lg:px-8">
-      <div className="sm:mx-auto sm:w-full sm:max-w-md">
-        <h2 className="mt-6 text-center text-3xl font-bold tracking-tight text-slate-900">
-          {isLogin ? 'Sign in to your account' : 'Create a new account'}
+    <div className="mesh-bg flex min-h-[100vh] flex-col justify-center py-12 sm:px-6 lg:px-8 relative overflow-hidden">
+      <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary-400/20 rounded-full blur-[80px] animate-float" />
+      <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-secondary-400/20 rounded-full blur-[80px] animate-float" style={{ animationDelay: '2s' }} />
+
+      <div className="sm:mx-auto sm:w-full sm:max-w-md relative z-10 animate-fade-in-up">
+        <h2 className="mt-6 text-center text-4xl font-extrabold tracking-tight text-slate-900 mb-8">
+          {isLogin ? 'Welcome Back' : 'Join CareManager'}
         </h2>
       </div>
 
-      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="bg-white py-8 px-4 shadow sm:rounded-xl sm:px-10 border border-slate-100">
+      <div className="sm:mx-auto sm:w-full sm:max-w-md relative z-10 animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
+        <div className="glass-card py-10 px-6 sm:px-12">
           <form className="space-y-6" onSubmit={handleSubmit}>
             {error && (
-              <div className="bg-red-50 text-red-500 p-3 rounded-lg text-sm">
-                {error}
+              <div className="bg-red-500/10 text-red-600 p-4 rounded-xl text-sm border border-red-500/20 flex items-center">
+                <span className="font-medium">{error}</span>
               </div>
             )}
             <div>
-              <label className="block text-sm font-medium text-slate-700">Email address</label>
+              <label className="block text-sm font-semibold text-slate-700 mb-2">Email Address</label>
               <div className="mt-1">
                 <input
                   type="email"
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="block w-full appearance-none rounded-lg border border-slate-300 px-3 py-2 shadow-sm focus:border-primary-500 focus:outline-none focus:ring-primary-500 sm:text-sm"
+                  className="block w-full appearance-none rounded-xl border border-slate-200/60 bg-white/50 px-4 py-3 text-slate-900 placeholder-slate-400 shadow-sm focus:border-primary-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary-500/20 transition-all sm:text-sm"
+                  placeholder="you@example.com"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-700">Password</label>
+              <label className="block text-sm font-semibold text-slate-700 mb-2">Password</label>
               <div className="mt-1">
                 <input
                   type="password"
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="block w-full appearance-none rounded-lg border border-slate-300 px-3 py-2 shadow-sm focus:border-primary-500 focus:outline-none focus:ring-primary-500 sm:text-sm"
+                  className="block w-full appearance-none rounded-xl border border-slate-200/60 bg-white/50 px-4 py-3 text-slate-900 placeholder-slate-400 shadow-sm focus:border-primary-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary-500/20 transition-all sm:text-sm"
+                  placeholder="••••••••"
                 />
               </div>
             </div>
 
             {!isLogin && (
               <div>
-                <label className="block text-sm font-medium text-slate-700">Role</label>
+                <label className="block text-sm font-semibold text-slate-700 mb-2">I am a...</label>
                 <div className="mt-1">
                   <select
                     value={role}
                     onChange={(e) => setRole(e.target.value as any)}
-                    className="block w-full rounded-lg border border-slate-300 px-3 py-2 shadow-sm focus:border-primary-500 focus:outline-none focus:ring-primary-500 sm:text-sm"
+                    className="block w-full rounded-xl border border-slate-200/60 bg-white/50 px-4 py-3 text-slate-900 shadow-sm focus:border-primary-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary-500/20 transition-all sm:text-sm"
                   >
-                    <option value="patient">Patient</option>
-                    <option value="doctor">Doctor</option>
-                    <option value="admin">Admin</option>
+                    <option value="patient">Patient (Looking for care)</option>
+                    <option value="doctor">Doctor (Providing care)</option>
+                    <option value="admin">Administrator</option>
                   </select>
                 </div>
               </div>
             )}
 
-            <div>
+            <div className="pt-2">
               <button
                 type="submit"
                 disabled={loading}
-                className="flex w-full justify-center rounded-lg border border-transparent bg-primary-600 py-2.5 px-4 text-sm font-medium text-white shadow-sm hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:opacity-50 transition-colors"
+                className="premium-btn flex w-full justify-center rounded-xl bg-gradient-to-r from-primary-600 to-primary-700 py-3.5 px-4 text-sm font-bold text-white shadow-md shadow-primary-500/20 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:opacity-50 transition-all hover:-translate-y-0.5"
               >
-                {loading ? 'Processing...' : (isLogin ? 'Sign in' : 'Sign up')}
+                {loading ? 'Processing...' : (isLogin ? 'Sign In' : 'Create Account')}
               </button>
             </div>
           </form>
 
-          <div className="mt-6">
+          <div className="mt-8">
             <div className="relative">
               <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-slate-300" />
+                <div className="w-full border-t border-slate-200/60" />
               </div>
               <div className="relative flex justify-center text-sm">
-                <span className="bg-white px-2 text-slate-500">
+                <span className="bg-white/80 px-4 rounded-full text-slate-500 font-medium">
                   {isLogin ? 'New to CareManager?' : 'Already have an account?'}
                 </span>
               </div>
             </div>
 
-            <div className="mt-6">
+            <div className="mt-8">
               <button
                 onClick={() => setIsLogin(!isLogin)}
-                className="flex w-full justify-center rounded-lg border border-slate-300 bg-white py-2.5 px-4 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 transition-colors"
+                className="flex w-full justify-center rounded-xl border border-slate-200/80 bg-white/60 py-3.5 px-4 text-sm font-bold text-slate-700 shadow-sm hover:bg-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 transition-all hover:-translate-y-0.5"
               >
                 {isLogin ? 'Create an account' : 'Sign in instead'}
               </button>

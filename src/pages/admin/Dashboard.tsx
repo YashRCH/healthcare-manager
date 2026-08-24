@@ -39,11 +39,11 @@ export default function AdminDashboard() {
   };
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-3xl font-bold text-slate-900">Admin Dashboard</h1>
+    <div className="space-y-8 animate-fade-in-up">
+      <h1 className="text-4xl font-extrabold text-slate-900 tracking-tight">Admin Dashboard</h1>
 
-      <div className="grid md:grid-cols-2 gap-6">
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+      <div className="grid md:grid-cols-2 gap-8">
+        <div className="glass-card p-8">
           <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
             <Shield className="w-5 h-5 text-primary-500" />
             Manage Doctors
@@ -54,10 +54,10 @@ export default function AdminDashboard() {
               <div 
                 key={doc.id}
                 onClick={() => setSelectedDoctor(doc)}
-                className={`p-4 rounded-lg border cursor-pointer transition-all ${selectedDoctor?.id === doc.id ? 'border-primary-500 bg-primary-50 ring-1 ring-primary-500' : 'border-slate-200 hover:border-primary-300'}`}
+                className={`p-5 rounded-xl border cursor-pointer transition-all hover:shadow-md ${selectedDoctor?.id === doc.id ? 'border-primary-500 bg-primary-50/80 ring-2 ring-primary-500/20 scale-[1.02]' : 'border-slate-200 bg-white/60 hover:border-primary-300 hover:scale-[1.01]'}`}
               >
-                <h3 className="font-semibold text-slate-900">{doc.email}</h3>
-                <p className="text-sm text-slate-500">{doc.specialization} • Slot: {doc.slotDuration} min</p>
+                <h3 className="font-bold text-slate-900 text-lg">{doc.name || doc.email}</h3>
+                <p className="text-sm text-slate-600 mt-1">{doc.specialization} • Slot: {doc.slotDuration} min</p>
               </div>
             ))}
             {doctors.length === 0 && <p className="text-slate-500">No doctors found.</p>}
@@ -65,9 +65,9 @@ export default function AdminDashboard() {
         </div>
 
         {selectedDoctor && (
-          <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 animate-in fade-in slide-in-from-right-4 h-fit">
-            <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
-              <CalendarOff className="w-5 h-5 text-red-500" />
+          <div className="glass-card p-8 animate-fade-in-up h-fit">
+            <h2 className="text-xl font-semibold mb-6 flex items-center gap-2">
+              <CalendarOff className="w-6 h-6 text-red-500" />
               Mark Doctor Leave
             </h2>
             
@@ -77,12 +77,12 @@ export default function AdminDashboard() {
 
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Leave Date</label>
+                <label className="block text-sm font-semibold text-slate-700 mb-2">Leave Date</label>
                 <input
                   type="date"
                   value={leaveDate}
                   onChange={(e) => setLeaveDate(e.target.value)}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+                  className="w-full rounded-xl border border-slate-200 bg-white/50 px-4 py-3 text-slate-900 focus:border-red-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-500/20 transition-all shadow-sm"
                 />
               </div>
 
@@ -95,7 +95,7 @@ export default function AdminDashboard() {
               <button
                 onClick={markLeave}
                 disabled={loading}
-                className="w-full bg-red-600 text-white font-medium px-4 py-2.5 rounded-lg hover:bg-red-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+                className="premium-btn w-full bg-gradient-to-r from-red-600 to-red-700 text-white font-bold px-4 py-3.5 rounded-xl hover:shadow-lg shadow-red-500/30 transition-all flex items-center justify-center gap-2 disabled:opacity-50 hover:-translate-y-0.5 mt-2"
               >
                 <Plus className="w-5 h-5" />
                 {loading ? 'Processing...' : 'Confirm Leave'}
