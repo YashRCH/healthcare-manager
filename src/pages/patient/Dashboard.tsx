@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { useAuth } from '../../context/AuthContext';
-import { Search, Calendar, Stethoscope, AlertCircle, FileText, Activity, Pill, History } from 'lucide-react';
+import { Search, Calendar, Stethoscope, AlertCircle, Activity, Pill, History } from 'lucide-react';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '../../firebase';
 
