@@ -23,8 +23,8 @@ service cloud.firestore {
     match /users/{userId} {
       // Admins can read/write all
       // Doctors can read all users (to find patient profiles)
-      // Users can only read/write their own profile
-      allow read: if isAuthenticated() && (isAdmin() || isDoctor() || request.auth.uid == userId);
+      // Users can read their own profile, and ANY user can read a doctor's profile to book them.
+      allow read: if isAuthenticated() && (isAdmin() || isDoctor() || request.auth.uid == userId || resource.data.role == 'doctor');
       allow write: if isAuthenticated() && (isAdmin() || request.auth.uid == userId);
       
       // 1a. Prescriptions subcollection
