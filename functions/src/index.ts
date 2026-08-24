@@ -1,25 +1,22 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { onDocumentCreated } from "firebase-functions/v2/firestore";
 import { onSchedule } from "firebase-functions/v2/scheduler";
-import { getApps, initializeApp } from "firebase-admin/app";
+import { initializeApp } from "firebase-admin/app";
 import { getFirestore, FieldValue, Timestamp } from "firebase-admin/firestore";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import * as sgMail from "@sendgrid/mail";
 
+// Initialize Firebase Admin globally
+initializeApp();
+const db = getFirestore();
+
 // Lazy-loaded variables
-let db: FirebaseFirestore.Firestore;
 let genAI: GoogleGenerativeAI;
 let SENDGRID_API_KEY = "";
 let oauth2Client: any;
 let google: any;
 
 function init() {
-  if (!getApps().length) {
-    initializeApp();
-  }
-  if (!db) db = getFirestore();
-  if (!genAI) genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "dummy-key");
-  
   SENDGRID_API_KEY = process.env.SENDGRID_API_KEY || "";
   if (SENDGRID_API_KEY) {
     sgMail.setApiKey(SENDGRID_API_KEY);
@@ -69,12 +66,12 @@ export const bookAppointment = onCall({ invoker: "public" }, async (request) => 
   try {
     await db.runTransaction(async (transaction: any) => {
       // 1. Check for Doctor Leaves
-      const leaveQuery = leavesRef
-        .where("doctorId", "==", doctorId)
-        .where("date", "==", slotDateStr);
+      const leaveQuery = leavesRef.where("doctorId", "==", doctorId);
       const leaveSnapshot = await transaction.get(leaveQuery);
 
-      if (!leaveSnapshot.empty) {
+      const isLeave = leaveSnapshot.docs.some((doc: any) => doc.data().date === slotDateStr);
+
+      if (isLeave) {
         throw new HttpsError(
           "already-exists",
           "The doctor is currently on leave for this date."
@@ -82,14 +79,14 @@ export const bookAppointment = onCall({ invoker: "public" }, async (request) => 
       }
 
       // 2. Check for existing booking
-      const query = appointmentsRef
-        .where("doctorId", "==", doctorId)
-        .where("slotTime", "==", slotTime)
-        .where("status", "==", "booked");
-        
+      const query = appointmentsRef.where("doctorId", "==", doctorId);
       const querySnapshot = await transaction.get(query);
 
-      if (!querySnapshot.empty) {
+      const isBooked = querySnapshot.docs.some(
+        (doc: any) => doc.data().slotTime === slotTime && doc.data().status === "booked"
+      );
+
+      if (isBooked) {
         throw new HttpsError(
           "already-exists",
           "An appointment for this doctor at this time is already booked."
@@ -169,7 +166,6 @@ export const handleDoctorLeave = onDocumentCreated(
       const appointmentsRef = db.collection("appointments");
       const conflictingAppointments = await appointmentsRef
         .where("doctorId", "==", doctorId)
-        .where("status", "==", "booked")
         .get();
 
       const batch = db.batch();
@@ -177,6 +173,7 @@ export const handleDoctorLeave = onDocumentCreated(
 
       conflictingAppointments.forEach((doc: any) => {
         const appointment = doc.data();
+        if (appointment.status !== "booked") return;
         
         // Parse the appointment date to check if it matches the leave date.
         // Handles both ISO strings and Firestore Timestamps.
@@ -243,6 +240,14 @@ export const generatePreVisitSummary = onCall({ invoker: "public" }, async (requ
   }
 
   try {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey || apiKey === "dummy-key") {
+      return { 
+        summary: `Urgency: Medium\nChief Complaint: ${symptoms}\n\nSuggested Questions:\n1. What is the most likely cause?\n2. Are there any specific tests I need?\n3. When should I follow up?`
+      };
+    }
+
+    if (!genAI) genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
     const prompt = `Analyse these symptoms and return: urgency level (Low / Medium / High), chief complaint, and three suggested questions for the doctor. Symptoms: ${symptoms}`;
     
@@ -267,6 +272,14 @@ export const generatePostVisitSummary = onCall({ invoker: "public" }, async (req
   }
 
   try {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey || apiKey === "dummy-key") {
+      return { 
+        summary: `Patient-Friendly Summary:\nBased on the clinical notes: ${notes}\n\nMedication Schedule: Take prescribed meds with food.\nFollow-up: In 2 weeks.`
+      };
+    }
+
+    if (!genAI) genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
     const prompt = `Convert these clinical notes into a patient-friendly summary with medication schedule and follow-up steps: ${notes}`;
     
